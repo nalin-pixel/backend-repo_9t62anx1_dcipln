@@ -101,6 +101,31 @@ def serialize(doc):
         doc["id"] = str(doc.pop("_id"))
     return doc
 
+# Privacy helpers
+
+def mask_name(name: str) -> str:
+    try:
+        parts = [p for p in name.strip().split(" ") if p]
+        if not parts:
+            return "Customer"
+        masked_parts = []
+        for p in parts:
+            if len(p) <= 2:
+                masked_parts.append(p[0] + "*")
+            else:
+                masked_parts.append(p[0] + "***")
+        return " ".join(masked_parts)
+    except Exception:
+        return "Customer"
+
+
+def mask_phone(phone: str) -> str:
+    digits = [c for c in phone if c.isdigit()]
+    if len(digits) < 4:
+        return "***"
+    last4 = "".join(digits[-4:])
+    return f"***-***-{last4}"
+
 
 # Seed default barbers and services if empty
 @app.on_event("startup")
@@ -148,7 +173,34 @@ def add_service(body: ServiceIn):
 def list_appointments(barber_id: Optional[str] = None):
     q = {"barber_id": barber_id} if barber_id else {}
     items = get_documents("appointment", q)
-    return [serialize(i) for i in items]
+    # Apply privacy masking on public listing
+    sanitized = []
+    for i in items:
+        i = serialize(i)
+        i["customer_name"] = mask_name(i.get("customer_name", ""))
+        i["customer_phone"] = mask_phone(i.get("customer_phone", ""))
+        # Avoid leaking notes in the listing
+        if "notes" in i:
+            i["notes"] = None
+        sanitized.append(i)
+    return sanitized
+
+@app.get("/api/appointments/check")
+def check_availability(
+    barber_id: str = Query(..., description="Barber ID"),
+    start_time: datetime = Query(..., description="ISO start time"),
+    duration_min: int = Query(..., description="Duration in minutes"),
+):
+    start = start_time
+    end = start + timedelta(minutes=duration_min)
+    conflict = db["appointment"].find_one({
+        "barber_id": barber_id,
+        "status": {"$ne": "canceled"},
+        "$or": [
+            {"start_time": {"$lt": end}, "end_time": {"$gt": start}}
+        ]
+    })
+    return {"available": conflict is None}
 
 @app.post("/api/appointments")
 def create_appointment(body: AppointmentIn):

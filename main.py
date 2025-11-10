@@ -1,8 +1,14 @@
 import os
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
+from datetime import datetime, timedelta
+from typing import List, Optional
 
-app = FastAPI()
+from fastapi import FastAPI, HTTPException, Query
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+
+from database import db, create_document, get_documents
+
+app = FastAPI(title="Barber Booking API")
 
 app.add_middleware(
     CORSMiddleware,
@@ -12,17 +18,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+# Public health/info endpoints
 @app.get("/")
 def read_root():
-    return {"message": "Hello from FastAPI Backend!"}
-
-@app.get("/api/hello")
-def hello():
-    return {"message": "Hello from the backend API!"}
+    return {"message": "Barber Booking API running"}
 
 @app.get("/test")
 def test_database():
-    """Test endpoint to check if database is available and accessible"""
     response = {
         "backend": "✅ Running",
         "database": "❌ Not Available",
@@ -31,41 +34,150 @@ def test_database():
         "connection_status": "Not Connected",
         "collections": []
     }
-    
     try:
-        # Try to import database module
-        from database import db
-        
         if db is not None:
             response["database"] = "✅ Available"
             response["database_url"] = "✅ Configured"
-            response["database_name"] = db.name if hasattr(db, 'name') else "✅ Connected"
+            response["database_name"] = getattr(db, 'name', "✅ Connected")
             response["connection_status"] = "Connected"
-            
-            # Try to list collections to verify connectivity
             try:
                 collections = db.list_collection_names()
-                response["collections"] = collections[:10]  # Show first 10 collections
+                response["collections"] = collections[:10]
                 response["database"] = "✅ Connected & Working"
             except Exception as e:
                 response["database"] = f"⚠️  Connected but Error: {str(e)[:50]}"
         else:
             response["database"] = "⚠️  Available but not initialized"
-            
-    except ImportError:
-        response["database"] = "❌ Database module not found (run enable-database first)"
     except Exception as e:
         response["database"] = f"❌ Error: {str(e)[:50]}"
-    
-    # Check environment variables
-    import os
+
     response["database_url"] = "✅ Set" if os.getenv("DATABASE_URL") else "❌ Not Set"
     response["database_name"] = "✅ Set" if os.getenv("DATABASE_NAME") else "❌ Not Set"
-    
     return response
 
 
-if __name__ == "__main__":
-    import uvicorn
-    port = int(os.getenv("PORT", 8000))
-    uvicorn.run(app, host="0.0.0.0", port=port)
+# Schemas for request bodies
+class BarberIn(BaseModel):
+    name: str
+    avatar_url: Optional[str] = None
+    bio: Optional[str] = None
+
+class ServiceIn(BaseModel):
+    name: str
+    description: Optional[str] = None
+    duration_min: int
+    price: float
+
+class AppointmentIn(BaseModel):
+    customer_name: str
+    customer_phone: str
+    barber_id: str
+    service_name: str
+    start_time: datetime
+    duration_min: int
+    notes: Optional[str] = None
+
+class AppointmentOut(BaseModel):
+    id: str
+    customer_name: str
+    customer_phone: str
+    barber_id: str
+    service_name: str
+    start_time: datetime
+    end_time: datetime
+    duration_min: int
+    notes: Optional[str] = None
+    status: str
+
+
+# Helper to convert Mongo _id to string
+from bson import ObjectId
+
+def serialize(doc):
+    if not doc:
+        return doc
+    doc = dict(doc)
+    if doc.get("_id"):
+        doc["id"] = str(doc.pop("_id"))
+    return doc
+
+
+# Seed default barbers and services if empty
+@app.on_event("startup")
+async def seed_defaults():
+    for name in ["John Fade", "Lisa Shear", "Mike Lineup"]:
+        if db["barber"].count_documents({"name": name}) == 0:
+            create_document("barber", {"name": name, "bio": "Pro barber"})
+
+    default_services = [
+        {"name": "Haircut", "duration_min": 30, "price": 25.0},
+        {"name": "Beard Trim", "duration_min": 15, "price": 15.0},
+        {"name": "Haircut + Beard", "duration_min": 45, "price": 35.0},
+    ]
+    for s in default_services:
+        if db["service"].count_documents({"name": s["name"]}) == 0:
+            create_document("service", s)
+
+
+# Catalog endpoints
+@app.get("/api/barbers")
+def list_barbers():
+    items = get_documents("barber")
+    return [serialize(i) for i in items]
+
+@app.post("/api/barbers")
+def add_barber(body: BarberIn):
+    _id = create_document("barber", body)
+    doc = db["barber"].find_one({"_id": ObjectId(_id)})
+    return serialize(doc)
+
+@app.get("/api/services")
+def list_services():
+    items = get_documents("service")
+    return [serialize(i) for i in items]
+
+@app.post("/api/services")
+def add_service(body: ServiceIn):
+    _id = create_document("service", body)
+    doc = db["service"].find_one({"_id": ObjectId(_id)})
+    return serialize(doc)
+
+
+# Appointment endpoints
+@app.get("/api/appointments")
+def list_appointments(barber_id: Optional[str] = None):
+    q = {"barber_id": barber_id} if barber_id else {}
+    items = get_documents("appointment", q)
+    return [serialize(i) for i in items]
+
+@app.post("/api/appointments")
+def create_appointment(body: AppointmentIn):
+    # compute end_time and check overlap
+    start = body.start_time
+    end = start + timedelta(minutes=body.duration_min)
+
+    conflict = db["appointment"].find_one({
+        "barber_id": body.barber_id,
+        "status": {"$ne": "canceled"},
+        "$or": [
+            {"start_time": {"$lt": end}, "end_time": {"$gt": start}}
+        ]
+    })
+    if conflict:
+        raise HTTPException(status_code=400, detail="Time slot not available")
+
+    data = body.model_dump()
+    data["end_time"] = end
+    data["status"] = "booked"
+    _id = create_document("appointment", data)
+    doc = db["appointment"].find_one({"_id": ObjectId(_id)})
+    return serialize(doc)
+
+@app.patch("/api/appointments/{appointment_id}/cancel")
+def cancel_appointment(appointment_id: str):
+    oid = ObjectId(appointment_id)
+    res = db["appointment"].update_one({"_id": oid}, {"$set": {"status": "canceled", "updated_at": datetime.utcnow()}})
+    if res.modified_count == 0:
+        raise HTTPException(status_code=404, detail="Appointment not found")
+    doc = db["appointment"].find_one({"_id": oid})
+    return serialize(doc)

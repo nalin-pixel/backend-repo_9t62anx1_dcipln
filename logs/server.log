@@ -1,19 +1,19 @@
 INFO:     Will watch for changes in these directories: ['/home/workspace']
 INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
-INFO:     Started reloader process [252] using StatReload
-INFO:     Started server process [254]
+INFO:     Started reloader process [339] using StatReload
+INFO:     Started server process [341]
 INFO:     Waiting for application startup.
 INFO:     Application startup complete.
-INFO:     172.20.0.1:59738 - "GET /api/appointments HTTP/1.1" 200 OK
-INFO:     172.20.0.1:59754 - "HEAD / HTTP/1.1" 405 Method Not Allowed
-INFO:     172.20.0.1:59742 - "GET /api/services HTTP/1.1" 200 OK
-INFO:     172.20.0.1:59742 - "GET /api/services HTTP/1.1" 200 OK
-INFO:     172.20.0.1:59738 - "GET /api/appointments HTTP/1.1" 200 OK
-INFO:     172.20.0.1:59738 - "GET /api/barbers HTTP/1.1" 200 OK
-INFO:     172.20.0.1:59738 - "GET /api/barbers HTTP/1.1" 200 OK
-INFO:     172.20.0.1:46786 - "GET /api/services HTTP/1.1" 200 OK
-INFO:     172.20.0.1:46788 - "GET /api/barbers HTTP/1.1" 200 OK
-INFO:     172.20.0.1:46788 - "GET /api/services HTTP/1.1" 200 OK
-INFO:     172.20.0.1:46786 - "GET /api/barbers HTTP/1.1" 200 OK
-INFO:     172.20.0.1:46794 - "GET /api/appointments HTTP/1.1" 200 OK
-INFO:     172.20.0.1:46794 - "GET /api/appointments HTTP/1.1" 200 OK
+INFO:     172.20.0.1:44222 - "GET /api/barbers HTTP/1.1" 200 OK
+INFO:     172.20.0.1:44238 - "HEAD / HTTP/1.1" 405 Method Not Allowed
+INFO:     172.20.0.1:44222 - "GET /api/barbers HTTP/1.1" 200 OK
+INFO:     172.20.0.1:44232 - "GET /api/services HTTP/1.1" 200 OK
+INFO:     172.20.0.1:44226 - "GET /api/appointments HTTP/1.1" 200 OK
+INFO:     172.20.0.1:44232 - "GET /api/services HTTP/1.1" 200 OK
+INFO:     172.20.0.1:44226 - "GET /api/appointments HTTP/1.1" 200 OK
+INFO:     172.20.0.1:46454 - "GET /api/barbers HTTP/1.1" 200 OK
+INFO:     172.20.0.1:46468 - "GET /api/appointments HTTP/1.1" 200 OK
+INFO:     172.20.0.1:46466 - "GET /api/services HTTP/1.1" 200 OK
+INFO:     172.20.0.1:46454 - "GET /api/barbers HTTP/1.1" 200 OK
+INFO:     172.20.0.1:46466 - "GET /api/services HTTP/1.1" 200 OK
+INFO:     172.20.0.1:46468 - "GET /api/appointments HTTP/1.1" 200 OK

@@ -134,14 +134,20 @@ async def seed_defaults():
         if db["barber"].count_documents({"name": name}) == 0:
             create_document("barber", {"name": name, "bio": "Pro barber"})
 
+    # Update default services and ensure Haircut price is 18
     default_services = [
-        {"name": "Haircut", "duration_min": 30, "price": 25.0},
+        {"name": "Haircut", "duration_min": 30, "price": 18.0},
         {"name": "Beard Trim", "duration_min": 15, "price": 15.0},
         {"name": "Haircut + Beard", "duration_min": 45, "price": 35.0},
     ]
     for s in default_services:
-        if db["service"].count_documents({"name": s["name"]}) == 0:
+        existing = db["service"].find_one({"name": s["name"]})
+        if not existing:
             create_document("service", s)
+        else:
+            # Ensure "Haircut" price reflects the new value and keep duration consistent
+            if s["name"] == "Haircut":
+                db["service"].update_one({"_id": existing["_id"]}, {"$set": {"price": 18.0, "duration_min": s["duration_min"]}})
 
 
 # Catalog endpoints
